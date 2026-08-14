@@ -15,6 +15,16 @@
     "build:sea": "node ./scripts/build-sea.mjs"
   },
   "license": "MIT",
+  "author": "Victorow",
+  "keywords": ["claude-code", "telegram", "bot", "notifications", "remote-control", "bridge"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Victorow/claude-telegram-bridge.git"
+  },
+  "homepage": "https://github.com/Victorow/claude-telegram-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/Victorow/claude-telegram-bridge/issues"
+  },
   "private": true,
   "devDependencies": {
     "esbuild": "^0.28.2",
