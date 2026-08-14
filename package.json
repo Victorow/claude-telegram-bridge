@@ -1,0 +1,18 @@
+{
+  "name": "claude-telegram-bridge",
+  "version": "0.1.0",
+  "description": "Free, self-hosted Telegram bridge for Claude Code: get notified on your phone when a session finishes, reply to continue it.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "bin": {
+    "claude-telegram-bridge": "./bin/bridge.js"
+  },
+  "scripts": {
+    "start": "node ./bin/bridge.js start",
+    "test": "node --test test/**/*.test.js"
+  },
+  "license": "MIT",
+  "private": true
+}
