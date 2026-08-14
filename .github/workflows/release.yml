@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            asset: claude-telegram-bridge.exe
+          - os: macos-latest
+            asset: claude-telegram-bridge
+          - os: ubuntu-latest
+            asset: claude-telegram-bridge
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run build:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-binary
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename artifacts to their final release names
+        run: |
+          mkdir -p release
+          cp artifacts/windows-latest-binary/claude-telegram-bridge.exe release/claude-telegram-bridge-windows.exe
+          cp artifacts/macos-latest-binary/claude-telegram-bridge release/claude-telegram-bridge-macos
+          cp artifacts/ubuntu-latest-binary/claude-telegram-bridge release/claude-telegram-bridge-linux
+          chmod +x release/claude-telegram-bridge-macos release/claude-telegram-bridge-linux
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

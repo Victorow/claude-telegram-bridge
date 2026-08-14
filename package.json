@@ -11,8 +11,13 @@
   },
   "scripts": {
     "start": "node ./bin/bridge.js start",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/**/*.test.js",
+    "build:sea": "node ./scripts/build-sea.mjs"
   },
   "license": "MIT",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
 }
