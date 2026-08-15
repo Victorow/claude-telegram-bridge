@@ -25,6 +25,7 @@ Get notified on your phone when a [Claude Code](https://claude.com/claude-code) 
 - **Reply** to that message to continue that exact session — no need to type anything else first.
 - Starting a new thread with no reply targets your most recently active session by default, or a specific one with `label: your message`.
 - `/off` disables everything (no messages sent, no messages processed) until you send `/on` — this works even while disabled, so you're never locked out.
+- **If the session you're replying to might still be open** in a terminal or IDE, the first reply forks it into a separate continuation instead of writing into that same open session (which Claude Code doesn't support safely). You'll get a one-time notice with the forked session's id and a way to reopen it later from your PC — after that, replying keeps extending that same fork, and the original stays completely untouched.
 
 ## Inviting someone else
 
@@ -75,7 +76,7 @@ Everything else (config, hooks, invites) works identically — the packaged bina
 
 ```
 npm ci
-npm test          # zero runtime dependencies; tests use Node's built-in test runner
+npm test          # tests use Node's built-in test runner
 npm run build:sea # builds a self-contained binary for your current OS into dist/
 ```
 
@@ -84,7 +85,7 @@ No test ever touches your real `~/.claude` or Telegram — everything is depende
 ## How it works (short version)
 
 - **Output**: Claude Code's own `Stop`/`Notification` hooks call this bridge, which relays the message via the Telegram Bot API.
-- **Input**: an incoming Telegram message resumes the right session headlessly (`claude --resume <id> -p "<text>"`); the resulting reply flows back through the same `Stop` hook path, not a second direct message.
+- **Input**: an incoming Telegram message resumes the right session headlessly (`claude --resume <id> -p "<text>"`); the resulting reply flows back through the same `Stop` hook path, not a second direct message. The first reply to a session that might still be open interactively forks it (`--fork-session`) instead of resuming in place, so it's never writing into a transcript another process might also be writing to; later replies extend that same fork directly.
 - **Isolation**: every session is tagged with an owner at install time; routing (reply, prefix, or most-recent) only ever considers sessions owned by whoever sent the message.
 
-Full design rationale and the complete spec live in `openspec/changes/add-telegram-bridge/`.
+Full design rationale and the complete spec live in `openspec/changes/add-telegram-bridge/` (the original design) and `openspec/changes/add-session-fork-safety/` (the forking behavior above).
