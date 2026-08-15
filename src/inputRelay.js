@@ -94,7 +94,8 @@ export async function handleInboundMessage(
       await send(
         config,
         chatId,
-        'Criei uma continuação separada dessa sessão (ela pode ainda estar aberta em outro lugar, como o IDE) — as próximas respostas por aqui vão continuar essa continuação separada.'
+        'Criei uma continuação separada dessa sessão (ela pode ainda estar aberta em outro lugar, como o IDE) — as próximas respostas por aqui vão continuar essa continuação separada. ' +
+          `Ela não aparece no seletor /resume (sessões headless não geram esse índice), mas dá pra abrir direto por ID: claude --resume ${forkedSessionId}`
       );
     }
 

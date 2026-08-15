@@ -29,11 +29,15 @@ The system SHALL, on a successful fork, extract the new session id from the head
 - **THEN** the system treats it as a failed continuation (per the existing failure-delivery requirement) and does not register anything or mark the original session as forked
 
 ### Requirement: Fork announcement
-The system SHALL send one explicit Telegram message announcing that a fork was created, separate from the continuation's own reply, the first time a given interactive-origin session is forked.
+The system SHALL send one explicit Telegram message announcing that a fork was created, including the forked session's exact id, separate from the continuation's own reply, the first time a given interactive-origin session is forked.
 
 #### Scenario: First fork of a session
 - **WHEN** a session is forked for the first time
-- **THEN** a Telegram message is sent to the requesting chat stating that a separate continuation was created, sent as soon as the headless call completes and the new session id is known — the continuation's own reply (sent by its `Stop` hook, which runs before that headless process exits) typically arrives first, and this announcement immediately after
+- **THEN** a Telegram message is sent to the requesting chat stating that a separate continuation was created and including its exact session id, sent as soon as the headless call completes and the new session id is known — the continuation's own reply (sent by its `Stop` hook, which runs before that headless process exits) typically arrives first, and this announcement immediately after
+
+#### Scenario: The fork's id is the only way to find it afterward
+- **WHEN** a session created by forking (headless/print mode) is checked against the `/resume` picker
+- **THEN** it does not appear there (confirmed: Claude Code does not generate the metadata record the picker indexes by for headless-created sessions), so the id included in the fork announcement is required, not cosmetic, for resuming it later from the PC
 
 #### Scenario: Later replies on an already-forked conversation
 - **WHEN** an inbound message resolves to a session that was already forked in a previous exchange

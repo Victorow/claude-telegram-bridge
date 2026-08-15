@@ -14,7 +14,7 @@ Also confirmed directly (via `claude --help` and a live test run):
 **Goals:**
 - Eliminate any possibility of the bridge corrupting a session's on-disk transcript, unconditionally — not dependent on a liveness guess.
 - Preserve today's single-continuation experience once a conversation has become Telegram-only (no repeated forking on every reply).
-- Make forking visible: the user is told, once, when and why it happened, and can find the forked conversation from the PC afterward like any other session.
+- Make forking visible: the user is told, once, when and why it happened, and given what they need (the exact session id) to resume the forked conversation from the PC afterward — the `/resume` picker won't list it (see Decision 6), so the id itself is the only way back to it.
 - Leave the original interactive session's transcript completely untouched after a fork.
 
 **Non-Goals:**
@@ -34,7 +34,7 @@ Also confirmed directly (via `claude --help` and a live test run):
 
 5. **Labels gain an origin suffix (`· IDE` / `· Telegram`) only once both an interactive-origin session and its fork are simultaneously registered for the same owner and label.** Before any fork exists, behavior is identical to today. This mirrors the existing `hasMultipleSessions` gating already used for label prefixing — the disambiguation appears exactly when it's needed, not before.
 
-6. **The fork is announced with one explicit Telegram message the moment it happens**, separate from the turn's own reply. Silently forking would leave the user unable to tell, from the chat alone, that they're now on a different session than the one the original notification came from.
+6. **The fork is announced with one explicit Telegram message the moment it happens**, separate from the turn's own reply, and that message includes the forked session's exact id. Silently forking would leave the user unable to tell, from the chat alone, that they're now on a different session than the one the original notification came from. Including the id is not cosmetic: confirmed directly (manual test, plus Claude Code's own docs and GitHub issues #37474/#44969) that a session created in headless/print mode — which forking uses — never appears in the `/resume` picker, because it lacks the `ai-title` record the picker indexes by. It remains fully resumable by exact id (`claude --resume <id>`), so without the id in the announcement, the only way to find it afterward would be reading the bridge's own `registry.json` by hand.
 
 ## Risks
 
