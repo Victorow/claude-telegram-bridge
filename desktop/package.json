@@ -1,0 +1,13 @@
+{
+  "name": "claude-telegram-bridge-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "prepare-sidecar": "node scripts/prepare-sidecar.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
