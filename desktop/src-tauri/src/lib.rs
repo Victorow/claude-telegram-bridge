@@ -103,6 +103,33 @@ async fn complete_onboarding(app: AppHandle, token: String) -> Result<String, St
 }
 
 #[tauri::command]
+async fn update_settings(app: AppHandle, enabled: Option<bool>, granularity: Option<String>) -> Result<String, String> {
+    let mut args: Vec<String> = vec!["settings".to_string(), "--json".to_string()];
+    if let Some(e) = enabled {
+        args.push("--set-enabled".to_string());
+        args.push(e.to_string());
+    }
+    if let Some(g) = granularity {
+        args.push("--set-granularity".to_string());
+        args.push(g);
+    }
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let sidecar = app
+        .shell()
+        .sidecar("bridge")
+        .map_err(|e| e.to_string())?
+        .args(arg_refs);
+    let output = sidecar.output().await.map_err(|e| e.to_string())?;
+    let result = String::from_utf8(output.stdout).map_err(|e| e.to_string())?.trim().to_string();
+
+    kill_sidecar(&app)?;
+    spawn_sidecar(&app).await?;
+
+    Ok(result)
+}
+
+#[tauri::command]
 async fn get_status(app: AppHandle) -> Result<String, String> {
     let running = {
         let state = app.state::<SidecarState>();
@@ -138,7 +165,8 @@ pub fn run() {
             start_bridge,
             stop_bridge,
             get_status,
-            complete_onboarding
+            complete_onboarding,
+            update_settings
         ])
         .setup(|app| {
             let handle = app.handle().clone();

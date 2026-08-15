@@ -5,12 +5,16 @@ const statusViewEl = document.getElementById('status-view');
 const statusEl = document.getElementById('status');
 const tokenInput = document.getElementById('token-input');
 const onboardingErrorEl = document.getElementById('onboarding-error');
+const enabledToggle = document.getElementById('enabled-toggle');
+const granularitySelect = document.getElementById('granularity-select');
 
 function renderStatus(status) {
   const ligado = status.enabled ? 'Ligado' : 'Desligado';
   const chat = status.connectedChatId ?? 'nenhum';
   const rodando = status.running ? 'Rodando' : 'Parado';
   statusEl.textContent = `${rodando} — ${ligado} — chat ${chat} — ${status.sessionCount} sessão(ões)`;
+  enabledToggle.checked = status.enabled;
+  granularitySelect.value = status.granularity;
 }
 
 function showOnboarding() {
@@ -69,6 +73,16 @@ document.getElementById('verify').addEventListener('click', async () => {
 
 document.getElementById('start').addEventListener('click', () => invoke('start_bridge'));
 document.getElementById('stop').addEventListener('click', () => invoke('stop_bridge'));
+
+enabledToggle.addEventListener('change', async () => {
+  await invoke('update_settings', { enabled: enabledToggle.checked, granularity: null });
+  await refresh();
+});
+
+granularitySelect.addEventListener('change', async () => {
+  await invoke('update_settings', { enabled: null, granularity: granularitySelect.value });
+  await refresh();
+});
 
 refresh();
 setInterval(refresh, 3000);
