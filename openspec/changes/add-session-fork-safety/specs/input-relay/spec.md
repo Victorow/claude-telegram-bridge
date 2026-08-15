@@ -39,6 +39,10 @@ The system SHALL send one explicit Telegram message announcing that a fork was c
 - **WHEN** a session created by forking (headless/print mode) is checked against the `/resume` picker
 - **THEN** it does not appear there (confirmed: Claude Code does not generate the metadata record the picker indexes by for headless-created sessions), so the id included in the fork announcement is required, not cosmetic, for resuming it later from the PC
 
+#### Scenario: Both a terminal and a VS Code way to reopen the fork
+- **WHEN** the fork announcement is sent
+- **THEN** it includes both the CLI form (`claude --resume <id>`) and the VS Code URI form (`vscode://anthropic.claude-code/open?session=<id>`, confirmed via the official VS Code extension docs), since either may be the user's active interface
+
 #### Scenario: Later replies on an already-forked conversation
 - **WHEN** an inbound message resolves to a session that was already forked in a previous exchange
 - **THEN** no additional fork announcement is sent

@@ -252,6 +252,7 @@ test('the first Telegram reply to an interactive-origin session forks instead of
   assert.equal(sent.length, 1);
   assert.match(sent[0].text, /continuação separada/);
   assert.match(sent[0].text, /claude --resume fork1/); // the fork never appears in the /resume picker (headless sessions lack the ai-title record it needs), so the id itself is the only way back to it
+  assert.match(sent[0].text, /vscode:\/\/anthropic\.claude-code\/open\?session=fork1/); // VS Code's own URI handler for opening a session by exact id
 });
 
 test('a second Telegram reply to an already-forked session resumes it directly without forking again', async () => {
