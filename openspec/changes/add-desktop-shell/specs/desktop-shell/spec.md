@@ -31,15 +31,19 @@ The bridge binary SHALL expose a `status --json` subcommand reporting whether it
 - **THEN** it reports enabled/disabled, the operator's connected owner/chat, the total session count across all owners, and the most recent activity timestamp across all sessions
 
 ### Requirement: Status view
-The desktop app SHALL poll the sidecar's `status --json` output on an interval and render whether the bridge is running, connected, and how many sessions are active.
+The desktop app SHALL poll a Rust-side `get_status` command on an interval and render whether the bridge is running, connected, and how many sessions are active. `get_status` first checks whether the sidecar process is currently tracked as alive (a Rust-side fact the bridge binary itself has no way to know, since `status --json` is a stateless one-shot read); only when it is does `get_status` additionally shell out to `status --json` and merge its fields in, augmented with `running: true`. This distinction exists because the CLI's own `status --json` (the Requirement above) is a pure disk snapshot — asking it "am I running" would be meaningless from inside a fresh, separate process it can't see its own supervisor from.
 
 #### Scenario: Sidecar running and connected
 - **WHEN** the sidecar process is alive and `status --json` reports a connected chat
 - **THEN** the status view shows "rodando" and the connected chat/session info
 
 #### Scenario: Sidecar not running
-- **WHEN** the sidecar process is not alive
+- **WHEN** the sidecar process is not alive (never started, explicitly stopped, or exited/crashed on its own)
 - **THEN** the status view shows "parado" without attempting to call `status --json`
+
+#### Scenario: Sidecar exits on its own without going through "Parar"
+- **WHEN** the sidecar process terminates unexpectedly (crash, killed externally) rather than via the app's own stop path
+- **THEN** the app detects this (via the sidecar's terminated event) and subsequent status polls report it as not running, instead of remaining stuck showing "rodando" for a process that no longer exists
 
 ### Requirement: Self-registered autostart
 The desktop app SHALL register itself (not the raw bridge binary) to launch at login, tray-only, as the sole autostart mechanism for this distribution.

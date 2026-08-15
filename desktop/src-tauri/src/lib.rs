@@ -3,7 +3,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 struct SidecarState(Mutex<Option<CommandChild>>);
@@ -19,8 +19,26 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         .sidecar("bridge")
         .map_err(|e| e.to_string())?
         .args(["start"]);
-    let (_rx, child) = sidecar.spawn().map_err(|e| e.to_string())?;
+    let (mut rx, child) = sidecar.spawn().map_err(|e| e.to_string())?;
     *guard = Some(child);
+    drop(guard);
+
+    // The sidecar can exit on its own (crash, killed externally) without going
+    // through `kill_sidecar` - without this, `SidecarState` would keep saying
+    // "running" forever after that, and `get_status` would never notice.
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            if let CommandEvent::Terminated(_) = event {
+                let state = app_handle.state::<SidecarState>();
+                if let Ok(mut guard) = state.0.lock() {
+                    *guard = None;
+                }
+                break;
+            }
+        }
+    });
+
     Ok(())
 }
 
@@ -45,13 +63,27 @@ fn stop_bridge(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn get_status(app: AppHandle) -> Result<String, String> {
+    let running = {
+        let state = app.state::<SidecarState>();
+        let guard = state.0.lock().map_err(|e| e.to_string())?;
+        guard.is_some()
+    };
+    if !running {
+        return Ok(serde_json::json!({ "running": false }).to_string());
+    }
+
     let sidecar = app
         .shell()
         .sidecar("bridge")
         .map_err(|e| e.to_string())?
         .args(["status", "--json"]);
     let output = sidecar.output().await.map_err(|e| e.to_string())?;
-    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+    let raw = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
+    let mut value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("running".to_string(), serde_json::Value::Bool(true));
+    }
+    Ok(value.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -3,13 +3,17 @@ const { invoke } = window.__TAURI__.core;
 const statusEl = document.getElementById('status');
 
 function render(status) {
+  if (!status.running) {
+    statusEl.textContent = 'Parado.';
+    return;
+  }
   if (!status.configured) {
-    statusEl.textContent = 'Bridge ainda não configurado.';
+    statusEl.textContent = 'Rodando — bridge ainda não configurado.';
     return;
   }
   const ligado = status.enabled ? 'Ligado' : 'Desligado';
   const chat = status.connectedChatId ?? 'nenhum';
-  statusEl.textContent = `${ligado} — chat ${chat} — ${status.sessionCount} sessão(ões)`;
+  statusEl.textContent = `Rodando — ${ligado} — chat ${chat} — ${status.sessionCount} sessão(ões)`;
 }
 
 async function refreshStatus() {
