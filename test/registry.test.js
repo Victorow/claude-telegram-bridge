@@ -5,6 +5,7 @@ import {
   recordOutboundMessage,
   resolveTarget,
   sessionsForOwner,
+  markForked,
 } from '../src/registry.js';
 
 function emptyRegistry() {
@@ -114,4 +115,58 @@ test('upsertSession updates lastActive without creating a duplicate entry', () =
   assert.equal(Object.keys(registry.sessions).length, 1);
   assert.equal(registry.sessions.abc.lastActive, 200);
   assert.equal(registry.sessions.abc.label, 'projeto1'); // preserved when not passed again
+});
+
+test('a session with no origin field defaults to interactive', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio' }, 100);
+  assert.equal(registry.sessions.abc.origin, 'interactive');
+});
+
+test('a session registered with an explicit origin keeps it', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork' }, 100);
+  assert.equal(registry.sessions.fork1.origin, 'telegram-fork');
+});
+
+test('updating a session again without an origin preserves its existing origin', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork' }, 100);
+  upsertSession(registry, { sessionId: 'fork1' }, 200);
+  assert.equal(registry.sessions.fork1.origin, 'telegram-fork');
+});
+
+test('markForked records which session an original was forked into', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio' }, 100);
+  markForked(registry, 'orig', 'fork1');
+  assert.equal(registry.sessions.orig.forkedInto, 'fork1');
+});
+
+test('reply to a message from a session that has since been forked resolves to the fork', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio' }, 100);
+  recordOutboundMessage(registry, '501', 'orig', 150);
+  upsertSession(registry, { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork' }, 200);
+  markForked(registry, 'orig', 'fork1');
+  const result = resolveTarget(registry, 'caio', { replyToMessageId: '501', text: 'continua' });
+  assert.equal(result.session.sessionId, 'fork1');
+});
+
+test('prefix resolution follows a fork pointer instead of returning the stale original', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio' }, 100);
+  upsertSession(registry, { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork' }, 50);
+  markForked(registry, 'orig', 'fork1');
+  const result = resolveTarget(registry, 'caio', { text: 'projeto1: oi' });
+  assert.equal(result.session.sessionId, 'fork1');
+});
+
+test('most-recent resolution follows a fork pointer instead of returning the stale original', () => {
+  const registry = emptyRegistry();
+  upsertSession(registry, { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio' }, 100);
+  upsertSession(registry, { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork' }, 50);
+  markForked(registry, 'orig', 'fork1');
+  const result = resolveTarget(registry, 'caio', { text: 'oi' });
+  assert.equal(result.session.sessionId, 'fork1');
 });
