@@ -130,6 +130,35 @@ async fn update_settings(app: AppHandle, enabled: Option<bool>, granularity: Opt
 }
 
 #[tauri::command]
+async fn create_invite(app: AppHandle, label: Option<String>) -> Result<String, String> {
+    let mut args: Vec<String> = vec!["invite".to_string(), "--json".to_string()];
+    if let Some(l) = label {
+        args.push("--for-account".to_string());
+        args.push(l);
+    }
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let sidecar = app
+        .shell()
+        .sidecar("bridge")
+        .map_err(|e| e.to_string())?
+        .args(arg_refs);
+    let output = sidecar.output().await.map_err(|e| e.to_string())?;
+    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn list_invites(app: AppHandle) -> Result<String, String> {
+    let sidecar = app
+        .shell()
+        .sidecar("bridge")
+        .map_err(|e| e.to_string())?
+        .args(["invite", "--list", "--json"]);
+    let output = sidecar.output().await.map_err(|e| e.to_string())?;
+    String::from_utf8(output.stdout).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_status(app: AppHandle) -> Result<String, String> {
     let running = {
         let state = app.state::<SidecarState>();
@@ -160,13 +189,16 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(SidecarState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             start_bridge,
             stop_bridge,
             get_status,
             complete_onboarding,
-            update_settings
+            update_settings,
+            create_invite,
+            list_invites
         ])
         .setup(|app| {
             let handle = app.handle().clone();

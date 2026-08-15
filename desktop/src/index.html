@@ -32,6 +32,17 @@
           <option value="verbose">Detalhada</option>
         </select>
       </label>
+      <hr />
+      <button id="toggle-invites">Convidar alguém</button>
+      <div id="invites-section" hidden>
+        <label>
+          Rótulo (opcional):
+          <input id="invite-label" type="text" placeholder="amigo" />
+        </label>
+        <button id="generate-invite">Gerar convite</button>
+        <p id="new-invite-code"></p>
+        <ul id="invites-list"></ul>
+      </div>
     </div>
 
     <script type="module" src="main.js"></script>

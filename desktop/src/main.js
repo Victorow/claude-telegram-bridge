@@ -7,6 +7,12 @@ const tokenInput = document.getElementById('token-input');
 const onboardingErrorEl = document.getElementById('onboarding-error');
 const enabledToggle = document.getElementById('enabled-toggle');
 const granularitySelect = document.getElementById('granularity-select');
+const toggleInvitesButton = document.getElementById('toggle-invites');
+const invitesSection = document.getElementById('invites-section');
+const inviteLabelInput = document.getElementById('invite-label');
+const generateInviteButton = document.getElementById('generate-invite');
+const newInviteCodeEl = document.getElementById('new-invite-code');
+const invitesListEl = document.getElementById('invites-list');
 
 function renderStatus(status) {
   const ligado = status.enabled ? 'Ligado' : 'Desligado';
@@ -82,6 +88,49 @@ enabledToggle.addEventListener('change', async () => {
 granularitySelect.addEventListener('change', async () => {
   await invoke('update_settings', { enabled: null, granularity: granularitySelect.value });
   await refresh();
+});
+
+async function renderInvitesList() {
+  const raw = await invoke('list_invites');
+  const parsed = JSON.parse(raw);
+  invitesListEl.innerHTML = '';
+  for (const invite of parsed.invites ?? []) {
+    const li = document.createElement('li');
+    const label = invite.ownerLabel ? ` (${invite.ownerLabel})` : '';
+    const status = invite.consumed
+      ? `Usado${invite.redeemedChatId ? ` — chat ${invite.redeemedChatId}` : ''}`
+      : 'Pendente';
+    li.textContent = `${invite.code}${label} — ${status}`;
+    invitesListEl.appendChild(li);
+  }
+}
+
+toggleInvitesButton.addEventListener('click', async () => {
+  const opening = invitesSection.hidden;
+  invitesSection.hidden = !opening;
+  if (opening) {
+    await renderInvitesList();
+  }
+});
+
+generateInviteButton.addEventListener('click', async () => {
+  const label = inviteLabelInput.value.trim() || null;
+  const raw = await invoke('create_invite', { label });
+  const parsed = JSON.parse(raw);
+  if (!parsed.ok) {
+    newInviteCodeEl.textContent = 'Não consegui gerar o convite.';
+    return;
+  }
+  newInviteCodeEl.innerHTML = '';
+  const codeSpan = document.createElement('span');
+  codeSpan.textContent = `Código: ${parsed.code} `;
+  const copyButton = document.createElement('button');
+  copyButton.textContent = 'Copiar';
+  copyButton.addEventListener('click', () => invoke('plugin:clipboard-manager|write_text', { text: parsed.code }));
+  newInviteCodeEl.appendChild(codeSpan);
+  newInviteCodeEl.appendChild(copyButton);
+  inviteLabelInput.value = '';
+  await renderInvitesList();
 });
 
 refresh();
