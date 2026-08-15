@@ -21,3 +21,7 @@ This app and the CLI's `claude-telegram-bridge start` (with its scheduled-task a
 ## Autostart
 
 On first successful run, this app registers **itself** (not the raw bridge binary) to launch at login, minimized to the tray. It's the one responsible for spawning the bridge sidecar as a supervised child process, so autostarting the raw binary separately would create two unrelated, unsupervised processes.
+
+## Known issues
+
+- **Windows taskbar icon missing in `npm run tauri dev`**: the window itself opens and behaves correctly, and the tray icon shows up fine, but no icon appears for it in the Windows taskbar while the window is open. `skip_taskbar` is confirmed `false` (the default) in `tauri.conf.json`, so this isn't a config choice — likely a dev-mode-only quirk (debug builds don't go through the same icon-resource-embedding step a real `tauri build` does). Not yet confirmed against a production build. Cosmetic only — doesn't affect functionality.
