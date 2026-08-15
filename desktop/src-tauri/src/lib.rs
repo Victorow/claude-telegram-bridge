@@ -8,7 +8,43 @@ use tauri_plugin_shell::ShellExt;
 
 struct SidecarState(Mutex<Option<CommandChild>>);
 
-fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
+async fn run_sidecar_with_stdin_line(app: &AppHandle, args: &[&str], stdin_line: &str) -> Result<String, String> {
+    let sidecar = app
+        .shell()
+        .sidecar("bridge")
+        .map_err(|e| e.to_string())?
+        .args(args);
+    let (mut rx, mut child) = sidecar.spawn().map_err(|e| e.to_string())?;
+
+    child
+        .write(format!("{stdin_line}\n").as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    let mut stdout = String::new();
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => stdout.push_str(&String::from_utf8_lossy(&bytes)),
+            CommandEvent::Terminated(_) => break,
+            _ => {}
+        }
+    }
+    Ok(stdout.trim().to_string())
+}
+
+async fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
+    let sidecar = app
+        .shell()
+        .sidecar("bridge")
+        .map_err(|e| e.to_string())?
+        .args(["status", "--json"]);
+    let output = sidecar.output().await.map_err(|e| e.to_string())?;
+    let raw = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let configured = value.get("configured").and_then(|v| v.as_bool()).unwrap_or(false);
+    if !configured {
+        return Ok(()); // nothing to do yet - the onboarding view is what's shown while unconfigured
+    }
+
     let state = app.state::<SidecarState>();
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     if guard.is_some() {
@@ -52,13 +88,18 @@ fn kill_sidecar(app: &AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn start_bridge(app: AppHandle) -> Result<(), String> {
-    spawn_sidecar(&app)
+async fn start_bridge(app: AppHandle) -> Result<(), String> {
+    spawn_sidecar(&app).await
 }
 
 #[tauri::command]
 fn stop_bridge(app: AppHandle) -> Result<(), String> {
     kill_sidecar(&app)
+}
+
+#[tauri::command]
+async fn complete_onboarding(app: AppHandle, token: String) -> Result<String, String> {
+    run_sidecar_with_stdin_line(&app, &["onboard", "--json"], &token).await
 }
 
 #[tauri::command]
@@ -68,9 +109,6 @@ async fn get_status(app: AppHandle) -> Result<String, String> {
         let guard = state.0.lock().map_err(|e| e.to_string())?;
         guard.is_some()
     };
-    if !running {
-        return Ok(serde_json::json!({ "running": false }).to_string());
-    }
 
     let sidecar = app
         .shell()
@@ -81,7 +119,7 @@ async fn get_status(app: AppHandle) -> Result<String, String> {
     let raw = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
     let mut value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
     if let Some(obj) = value.as_object_mut() {
-        obj.insert("running".to_string(), serde_json::Value::Bool(true));
+        obj.insert("running".to_string(), serde_json::Value::Bool(running));
     }
     Ok(value.to_string())
 }
@@ -96,12 +134,19 @@ pub fn run() {
             None,
         ))
         .manage(SidecarState(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![start_bridge, stop_bridge, get_status])
+        .invoke_handler(tauri::generate_handler![
+            start_bridge,
+            stop_bridge,
+            get_status,
+            complete_onboarding
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
-            if let Err(e) = spawn_sidecar(&handle) {
-                eprintln!("failed to spawn bridge sidecar on startup: {e}");
-            }
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = spawn_sidecar(&handle).await {
+                    eprintln!("failed to spawn bridge sidecar on startup: {e}");
+                }
+            });
             if let Err(e) = app.autolaunch().enable() {
                 eprintln!("failed to register autostart: {e}");
             }
@@ -117,7 +162,10 @@ pub fn run() {
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "start" => {
-                        let _ = spawn_sidecar(app);
+                        let app_handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = spawn_sidecar(&app_handle).await;
+                        });
                     }
                     "stop" => {
                         let _ = kill_sidecar(app);

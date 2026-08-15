@@ -6,10 +6,24 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <h1>Claude Telegram Bridge</h1>
-    <p id="status">Carregando...</p>
-    <button id="start">Iniciar</button>
-    <button id="stop">Parar</button>
+    <div id="onboarding" hidden>
+      <h1>Configurar o bridge</h1>
+      <p>1. Fale com o @BotFather no Telegram e crie um bot (envie <code>/newbot</code>).</p>
+      <button id="open-botfather">Abrir @BotFather</button>
+      <p>2. Cole aqui o token que ele te deu:</p>
+      <input id="token-input" type="text" placeholder="123456789:AAExampleTokenTextGoesHere" />
+      <p>3. Mande qualquer mensagem para o seu bot no Telegram, depois clique:</p>
+      <button id="verify">Verificar</button>
+      <p id="onboarding-error"></p>
+    </div>
+
+    <div id="status-view" hidden>
+      <h1>Claude Telegram Bridge</h1>
+      <p id="status">Carregando...</p>
+      <button id="start">Iniciar</button>
+      <button id="stop">Parar</button>
+    </div>
+
     <script type="module" src="main.js"></script>
   </body>
 </html>
