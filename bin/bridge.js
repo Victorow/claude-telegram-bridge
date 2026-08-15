@@ -10,7 +10,7 @@ import { installAccount, uninstallAccount, defaultClaudeSettingsPath, defaultHoo
 import { registerService } from '../src/service.js';
 import { runPollingLoop, sendMessage } from '../src/gateway.js';
 import { relayInboundMessage } from '../src/inputRelay.js';
-import { redeemInvite, createInvite } from '../src/registration.js';
+import { redeemInvite, createInvite, listInvites } from '../src/registration.js';
 import { handleHookEvent } from '../src/outputRelay.js';
 import { getStatusSnapshot } from '../src/status.js';
 import { appendLog } from '../src/log.js';
@@ -131,17 +131,38 @@ async function cmdStart() {
 }
 
 function cmdInvite(args) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      'for-account': { type: 'string' },
+      json: { type: 'boolean' },
+      list: { type: 'boolean' },
+    },
+  });
   const config = loadConfig();
   if (!config) {
-    console.error('Rode "start" pelo menos uma vez antes de convidar alguém.');
-    process.exitCode = 1;
+    if (values.json || values.list) {
+      console.log(JSON.stringify({ ok: false, reason: 'not-configured' }));
+    } else {
+      console.error('Rode "start" pelo menos uma vez antes de convidar alguém.');
+      process.exitCode = 1;
+    }
     return;
   }
-  const { values } = parseArgs({ args, options: { 'for-account': { type: 'string' } } });
+
+  if (values.list) {
+    console.log(JSON.stringify({ ok: true, invites: listInvites(config) }));
+    return;
+  }
+
   const code = createInvite(config, { ownerLabel: values['for-account'] || null });
   saveConfig(config);
-  console.log(`Código de convite: ${code}`);
-  console.log(`Peça para a pessoa mandar "/register ${code}" para o bot.`);
+  if (values.json) {
+    console.log(JSON.stringify({ ok: true, code }));
+  } else {
+    console.log(`Código de convite: ${code}`);
+    console.log(`Peça para a pessoa mandar "/register ${code}" para o bot.`);
+  }
 }
 
 function cmdInstall(args) {

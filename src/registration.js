@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { chatIdForOwner } from './config.js';
 
 /** Registers (or re-registers) a chat as belonging to the given owner. Used both by the first-run wizard (operator) and by invite-code redemption (invited owners). */
 export function registerOwner(config, chatId, ownerId) {
@@ -33,4 +34,15 @@ export function redeemInvite(config, chatId, code) {
   invite.consumed = true;
   registerOwner(config, chatId, ownerId);
   return { ok: true, ownerId };
+}
+
+/** Turns config.invites into a displayable list. redeemedChatId is only resolved for labeled, consumed invites (an invite's ownerLabel *is* the resulting owner id once redeemed - see redeemInvite above) - an unlabeled invite's derived owner id (`owner-<chatId>`) is left alone rather than reverse-parsed, since --for-account is the project's only documented usage. */
+export function listInvites(config) {
+  return Object.entries(config.invites).map(([code, invite]) => ({
+    code,
+    ownerLabel: invite.ownerLabel,
+    consumed: invite.consumed,
+    createdAt: invite.createdAt,
+    redeemedChatId: invite.consumed && invite.ownerLabel ? (chatIdForOwner(config, invite.ownerLabel) ?? null) : null,
+  }));
 }

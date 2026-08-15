@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { registerOwner, createInvite, redeemInvite } from '../src/registration.js';
+import { registerOwner, createInvite, redeemInvite, listInvites } from '../src/registration.js';
 
 function baseConfig() {
   return { botToken: 't', owners: {}, invites: {}, enabled: true, granularity: 'default' };
@@ -58,4 +58,39 @@ test('redeeming with a missing code is rejected without throwing', () => {
   const result = redeemInvite(config, '777', '');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'missing-code');
+});
+
+test('listInvites returns an empty array when no invites exist', () => {
+  const config = baseConfig();
+  assert.deepEqual(listInvites(config), []);
+});
+
+test('listInvites reports each invite\'s code, label, consumed state, and creation time', () => {
+  const config = baseConfig();
+  createInvite(config, { ownerLabel: 'amigo', now: () => 1000, randomBytes: () => 'code1' });
+  createInvite(config, { now: () => 2000, randomBytes: () => 'code2' });
+  const result = listInvites(config);
+  const byCode = Object.fromEntries(result.map((i) => [i.code, i]));
+  assert.equal(byCode.code1.ownerLabel, 'amigo');
+  assert.equal(byCode.code1.consumed, false);
+  assert.equal(byCode.code1.createdAt, 1000);
+  assert.equal(byCode.code2.ownerLabel, null);
+});
+
+test('listInvites resolves the redeeming chat id for a labeled, consumed invite', () => {
+  const config = baseConfig();
+  const code = createInvite(config, { ownerLabel: 'amigo', randomBytes: () => 'code1' });
+  redeemInvite(config, '777', code);
+  const result = listInvites(config);
+  assert.equal(result[0].consumed, true);
+  assert.equal(result[0].redeemedChatId, '777');
+});
+
+test('listInvites does not attempt to resolve a redeeming chat id for an unlabeled invite', () => {
+  const config = baseConfig();
+  const code = createInvite(config, { randomBytes: () => 'code1' });
+  redeemInvite(config, '777', code);
+  const result = listInvites(config);
+  assert.equal(result[0].consumed, true);
+  assert.equal(result[0].redeemedChatId, null);
 });
