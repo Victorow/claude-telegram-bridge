@@ -8,6 +8,7 @@ import { handleInboundMessage, relayInboundMessage } from '../src/inputRelay.js'
 
 function fakeChildProcess() {
   const child = new EventEmitter();
+  child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   return child;
 }
@@ -18,7 +19,7 @@ function baseConfig() {
 
 function registryWithOneSession() {
   return {
-    sessions: { abc: { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', lastActive: 100 } },
+    sessions: { abc: { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork', lastActive: 100 } },
     outboundMessages: {},
   };
 }
@@ -136,8 +137,8 @@ test('a crash before exit (spawn error, e.g. claude not on PATH) also surfaces a
 test('a reply to a tracked message resolves directly to that session, ignoring recency', async () => {
   const registry = {
     sessions: {
-      abc: { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', lastActive: 100 },
-      def: { sessionId: 'def', cwd: '/p2', label: 'projeto2', owner: 'caio', lastActive: 999 },
+      abc: { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork', lastActive: 100 },
+      def: { sessionId: 'def', cwd: '/p2', label: 'projeto2', owner: 'caio', origin: 'telegram-fork', lastActive: 999 },
     },
     outboundMessages: { '501': { sessionId: 'abc', sentAt: 100 } },
   };
@@ -162,7 +163,7 @@ test(
     const scriptPath = path.join(os.tmpdir(), `fake-claude-${process.pid}.cmd`);
     fs.writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n');
     const registry = {
-      sessions: { abc: { sessionId: 'abc', cwd: os.tmpdir(), label: 'projeto1', owner: 'caio', lastActive: 100 } },
+      sessions: { abc: { sessionId: 'abc', cwd: os.tmpdir(), label: 'projeto1', owner: 'caio', origin: 'telegram-fork', lastActive: 100 } },
       outboundMessages: {},
     };
     const sent = [];
@@ -196,7 +197,7 @@ test('relayInboundMessage reloads the registry at call time instead of using a s
   };
 
   // Registry mutates on disk "out of band" between bridge startup and the reply.
-  onDisk.sessions.abc = { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', lastActive: 100 };
+  onDisk.sessions.abc = { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork', lastActive: 100 };
 
   let spawnArgs;
   const spawnFn = (bin, args, opts) => {
@@ -216,4 +217,85 @@ test('relayInboundMessage reloads the registry at call time instead of using a s
   assert.equal(spawnArgs.args[1], 'abc');
   assert.ok(saved, 'registry should be saved back after handling');
   assert.ok(saved.sessions.abc, 'saving must not clobber the session the hook wrote');
+});
+
+test('the first Telegram reply to an interactive-origin session forks instead of resuming in place', async () => {
+  const registry = {
+    sessions: { orig: { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'interactive', lastActive: 100 } },
+    outboundMessages: {},
+  };
+  const sent = [];
+  const send = async (cfg, chatId, text) => sent.push({ chatId, text });
+  let spawnArgs;
+  const spawnFn = (bin, args, opts) => {
+    spawnArgs = { bin, args, opts };
+    const child = fakeChildProcess();
+    setImmediate(() => {
+      child.stdout.emit('data', JSON.stringify({ session_id: 'fork1' }));
+      child.emit('exit', 0);
+    });
+    return child;
+  };
+
+  const result = await handleInboundMessage(
+    baseConfig(),
+    registry,
+    'caio',
+    { text: 'continua', chatId: '111' },
+    { spawnFn, send, now: () => 999 }
+  );
+
+  assert.equal(result.handled, 'delegated-to-output-relay');
+  assert.deepEqual(spawnArgs.args, ['--resume', 'orig', '--fork-session', '-p', 'continua', '--output-format', 'json']);
+  assert.equal(registry.sessions.fork1.origin, 'telegram-fork');
+  assert.equal(registry.sessions.orig.forkedInto, 'fork1');
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /continuação separada/);
+});
+
+test('a second Telegram reply to an already-forked session resumes it directly without forking again', async () => {
+  const registry = {
+    sessions: {
+      orig: { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'interactive', lastActive: 100, forkedInto: 'fork1' },
+      fork1: { sessionId: 'fork1', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'telegram-fork', lastActive: 200 },
+    },
+    outboundMessages: {},
+  };
+  const sent = [];
+  const send = async (cfg, chatId, text) => sent.push({ chatId, text });
+  let spawnArgs;
+  const spawnFn = (bin, args, opts) => {
+    spawnArgs = { bin, args, opts };
+    const child = fakeChildProcess();
+    setImmediate(() => child.emit('exit', 0));
+    return child;
+  };
+
+  const result = await handleInboundMessage(baseConfig(), registry, 'caio', { text: 'mais uma', chatId: '111' }, { spawnFn, send });
+
+  assert.equal(result.handled, 'delegated-to-output-relay');
+  assert.deepEqual(spawnArgs.args, ['--resume', 'fork1', '-p', 'mais uma']);
+  assert.equal(sent.length, 0);
+});
+
+test('a fork attempt whose output has no parseable session id fails cleanly and leaves the registry untouched', async () => {
+  const registry = {
+    sessions: { orig: { sessionId: 'orig', cwd: '/p1', label: 'projeto1', owner: 'caio', origin: 'interactive', forkedInto: null, lastActive: 100 } },
+    outboundMessages: {},
+  };
+  const sent = [];
+  const send = async (cfg, chatId, text) => sent.push({ chatId, text });
+  const spawnFn = () => {
+    const child = fakeChildProcess();
+    setImmediate(() => child.emit('exit', 0)); // exits successfully but never writes usable JSON to stdout
+    return child;
+  };
+
+  const result = await handleInboundMessage(baseConfig(), registry, 'caio', { text: 'continua', chatId: '111' }, { spawnFn, send });
+
+  assert.equal(result.handled, 'failure');
+  assert.equal(Object.keys(registry.sessions).length, 1);
+  assert.equal(registry.sessions.orig.forkedInto, null);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /Não consegui continuar/);
 });
