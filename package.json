@@ -16,7 +16,14 @@
   },
   "license": "MIT",
   "author": "Victorow",
-  "keywords": ["claude-code", "telegram", "bot", "notifications", "remote-control", "bridge"],
+  "keywords": [
+    "claude-code",
+    "telegram",
+    "bot",
+    "notifications",
+    "remote-control",
+    "bridge"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Victorow/claude-telegram-bridge.git"
@@ -29,5 +36,8 @@
   "devDependencies": {
     "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6"
+  },
+  "dependencies": {
+    "cross-spawn": "^7.0.6"
   }
 }

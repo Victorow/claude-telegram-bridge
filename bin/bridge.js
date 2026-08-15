@@ -3,12 +3,11 @@ import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, saveConfig } from '../src/config.js';
-import { loadRegistry, saveRegistry } from '../src/registry.js';
 import { runFirstRunWizard } from '../src/wizard.js';
 import { installAccount, uninstallAccount, defaultClaudeSettingsPath, defaultHookInvocation } from '../src/installer.js';
 import { registerService } from '../src/service.js';
 import { runPollingLoop, sendMessage } from '../src/gateway.js';
-import { handleInboundMessage } from '../src/inputRelay.js';
+import { relayInboundMessage } from '../src/inputRelay.js';
 import { redeemInvite, createInvite } from '../src/registration.js';
 import { handleHookEvent } from '../src/outputRelay.js';
 import { appendLog } from '../src/log.js';
@@ -88,7 +87,6 @@ async function cmdStart() {
     process.exitCode = 1;
     return;
   }
-  const registry = loadRegistry();
 
   console.log('Bridge rodando (Ctrl+C para parar)...');
   await runPollingLoop(
@@ -109,12 +107,11 @@ async function cmdStart() {
         await sendMessage(config, chatId, enabled ? '✅ Integração ligada.' : '⏸️ Integração desligada.');
       },
       onMessage: async (chatId, ownerId, message) => {
-        await handleInboundMessage(config, registry, ownerId, {
+        await relayInboundMessage(config, ownerId, {
           replyToMessageId: message.reply_to_message?.message_id,
           text: message.text,
           chatId,
         });
-        saveRegistry(registry);
       },
     },
     { onError: (err) => appendLog(`polling loop error: ${err?.stack || err}`) }

@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
-import { resolveTarget } from './registry.js';
+import crossSpawn from 'cross-spawn';
+import { resolveTarget, loadRegistry, saveRegistry } from './registry.js';
 import { sendMessage } from './gateway.js';
 
 function runHeadless({ spawnFn, claudeBin, sessionId, cwd, prompt }) {
@@ -37,7 +37,7 @@ export async function handleInboundMessage(
   registry,
   ownerId,
   { replyToMessageId, text, chatId },
-  { spawnFn = spawn, send = sendMessage, claudeBin = 'claude' } = {}
+  { spawnFn = crossSpawn, send = sendMessage, claudeBin = 'claude' } = {}
 ) {
   const resolution = resolveTarget(registry, ownerId, { replyToMessageId, text });
 
@@ -58,4 +58,19 @@ export async function handleInboundMessage(
     await send(config, chatId, `Não consegui continuar essa sessão: ${err.message}`);
     return { handled: 'failure', error: err.message };
   }
+}
+
+/**
+ * Loads the registry fresh right before handling, instead of reusing a
+ * snapshot captured once at bridge startup. Sessions are also written by
+ * separate hook processes (one per Claude Code Stop/Notification event) as
+ * they happen, so a long-lived in-memory copy goes stale the moment any hook
+ * fires - and saving that stale copy back would clobber whatever the hook
+ * had just written.
+ */
+export async function relayInboundMessage(config, ownerId, messageInfo, { loadRegistryFn = loadRegistry, saveRegistryFn = saveRegistry, ...rest } = {}) {
+  const registry = loadRegistryFn();
+  const result = await handleInboundMessage(config, registry, ownerId, messageInfo, rest);
+  saveRegistryFn(registry);
+  return result;
 }

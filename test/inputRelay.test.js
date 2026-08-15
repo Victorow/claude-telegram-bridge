@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { handleInboundMessage } from '../src/inputRelay.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { handleInboundMessage, relayInboundMessage } from '../src/inputRelay.js';
 
 function fakeChildProcess() {
   const child = new EventEmitter();
@@ -150,4 +153,67 @@ test('a reply to a tracked message resolves directly to that session, ignoring r
 
   assert.equal(spawnArgs.args[1], 'abc');
   assert.equal(spawnArgs.opts.cwd, '/p1');
+});
+
+test(
+  'runHeadless invokes a Windows .cmd shim (like the real claude launcher) without ENOENT',
+  { skip: process.platform !== 'win32' ? 'Windows-only: reproduces the .cmd shim resolution bug' : false },
+  async () => {
+    const scriptPath = path.join(os.tmpdir(), `fake-claude-${process.pid}.cmd`);
+    fs.writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n');
+    const registry = {
+      sessions: { abc: { sessionId: 'abc', cwd: os.tmpdir(), label: 'projeto1', owner: 'caio', lastActive: 100 } },
+      outboundMessages: {},
+    };
+    const sent = [];
+    const send = async (cfg, chatId, text) => sent.push({ chatId, text });
+
+    try {
+      const result = await handleInboundMessage(
+        baseConfig(),
+        registry,
+        'caio',
+        { text: 'roda os testes', chatId: '111' },
+        { send, claudeBin: scriptPath } // no spawnFn override: exercises the real default spawn
+      );
+
+      assert.equal(result.handled, 'delegated-to-output-relay');
+      assert.equal(sent.length, 0);
+    } finally {
+      fs.unlinkSync(scriptPath);
+    }
+  }
+);
+
+test('relayInboundMessage reloads the registry at call time instead of using a stale snapshot from before a hook wrote to it', async () => {
+  // Simulates the polling loop starting with no sessions yet, then a Stop hook
+  // (a separate process) writing a session to disk before the reply arrives.
+  const onDisk = { sessions: {}, outboundMessages: {} };
+  const loadRegistryFn = () => onDisk;
+  let saved = null;
+  const saveRegistryFn = (r) => {
+    saved = r;
+  };
+
+  // Registry mutates on disk "out of band" between bridge startup and the reply.
+  onDisk.sessions.abc = { sessionId: 'abc', cwd: '/p1', label: 'projeto1', owner: 'caio', lastActive: 100 };
+
+  let spawnArgs;
+  const spawnFn = (bin, args, opts) => {
+    spawnArgs = { bin, args, opts };
+    const child = fakeChildProcess();
+    setImmediate(() => child.emit('exit', 0));
+    return child;
+  };
+
+  const result = await relayInboundMessage(baseConfig(), 'caio', { text: 'roda os testes', chatId: '111' }, {
+    loadRegistryFn,
+    saveRegistryFn,
+    spawnFn,
+  });
+
+  assert.equal(result.handled, 'delegated-to-output-relay');
+  assert.equal(spawnArgs.args[1], 'abc');
+  assert.ok(saved, 'registry should be saved back after handling');
+  assert.ok(saved.sessions.abc, 'saving must not clobber the session the hook wrote');
 });
