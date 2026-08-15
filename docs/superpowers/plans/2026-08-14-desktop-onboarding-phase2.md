@@ -186,8 +186,16 @@ Add the new command function near `cmdStatus`:
 ```javascript
 async function cmdOnboard() {
   const token = await readStdinLine();
-  const result = await attemptOnboarding(token);
-  console.log(JSON.stringify(result));
+  try {
+    const result = await attemptOnboarding(token);
+    console.log(JSON.stringify(result));
+  } catch (err) {
+    // attemptOnboarding's own failure modes (empty token, no message yet) are
+    // returned, not thrown - this only catches things like a malformed token
+    // rejected outright by Telegram's API. Always print valid JSON so the
+    // desktop app's Rust side never has to parse a bare stack trace.
+    console.log(JSON.stringify({ ok: false, reason: 'error', message: err.message }));
+  }
 }
 ```
 
@@ -207,7 +215,7 @@ Update the usage line:
 - [ ] **Step 7: Manually verify the subcommand**
 
 Run: `echo faketoken123 | node bin/bridge.js onboard`
-Expected: prints `{"ok":false,"reason":"no-message-yet"}` (assuming no real pending message for a fake token) - and, importantly, returns immediately rather than hanging.
+Expected: since `faketoken123` isn't a validly-formatted token, Telegram's API rejects it outright (confirmed: a 404) - the `catch` block above turns that into `{"ok":false,"reason":"error","message":"..."}`, valid JSON either way. Confirm it returns immediately rather than hanging.
 
 - [ ] **Step 8: Run the full test suite to check for regressions**
 
@@ -519,10 +527,13 @@ document.getElementById('verify').addEventListener('click', async () => {
   const result = await invoke('complete_onboarding', { token: tokenInput.value });
   const parsed = JSON.parse(result);
   if (!parsed.ok) {
-    onboardingErrorEl.textContent =
-      parsed.reason === 'empty-token'
-        ? 'Cole o token antes de verificar.'
-        : 'Não recebi nenhuma mensagem ainda. Manda uma mensagem pro bot no Telegram e tenta de novo.';
+    if (parsed.reason === 'empty-token') {
+      onboardingErrorEl.textContent = 'Cole o token antes de verificar.';
+    } else if (parsed.reason === 'no-message-yet') {
+      onboardingErrorEl.textContent = 'Não recebi nenhuma mensagem ainda. Manda uma mensagem pro bot no Telegram e tenta de novo.';
+    } else {
+      onboardingErrorEl.textContent = `Não consegui verificar: ${parsed.message ?? 'token inválido?'}`;
+    }
     return;
   }
   await invoke('start_bridge');

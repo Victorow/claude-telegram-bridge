@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runFirstRunWizard } from '../src/wizard.js';
+import { runFirstRunWizard, attemptOnboarding } from '../src/wizard.js';
 
 test('wizard is skipped entirely when config already exists', async () => {
   const result = await runFirstRunWizard({ configExistsFn: () => true });
@@ -54,4 +54,40 @@ test('wizard rejects an empty token before waiting for any message', async () =>
     /Token do bot não pode ser vazio/
   );
   assert.equal(getUpdatesCalled, false);
+});
+
+test('attemptOnboarding reports empty-token without making any network call', async () => {
+  const getUpdatesFn = async () => {
+    throw new Error('should not be called');
+  };
+  const result = await attemptOnboarding('   ', { getUpdatesFn, saveConfigFn: () => {} });
+  assert.deepEqual(result, { ok: false, reason: 'empty-token' });
+});
+
+test('attemptOnboarding reports no-message-yet without saving anything', async () => {
+  const getUpdatesFn = async () => [];
+  let saved = false;
+  const result = await attemptOnboarding('realtoken', {
+    getUpdatesFn,
+    saveConfigFn: () => {
+      saved = true;
+    },
+  });
+  assert.deepEqual(result, { ok: false, reason: 'no-message-yet' });
+  assert.equal(saved, false);
+});
+
+test('attemptOnboarding detects the chat and saves on success', async () => {
+  const getUpdatesFn = async () => [{ message: { chat: { id: 555 } } }];
+  let savedConfig = null;
+  const result = await attemptOnboarding('realtoken', {
+    getUpdatesFn,
+    saveConfigFn: (cfg) => {
+      savedConfig = cfg;
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.chatId, '555');
+  assert.equal(result.ownerId, 'operator');
+  assert.equal(savedConfig.owners['555'], 'operator');
 });

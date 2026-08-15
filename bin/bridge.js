@@ -2,9 +2,10 @@
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import readline from 'node:readline';
 import { loadConfig, saveConfig } from '../src/config.js';
 import { loadRegistry } from '../src/registry.js';
-import { runFirstRunWizard } from '../src/wizard.js';
+import { runFirstRunWizard, attemptOnboarding } from '../src/wizard.js';
 import { installAccount, uninstallAccount, defaultClaudeSettingsPath, defaultHookInvocation } from '../src/installer.js';
 import { registerService } from '../src/service.js';
 import { runPollingLoop, sendMessage } from '../src/gateway.js';
@@ -44,6 +45,15 @@ async function readStdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readStdinLine() {
+  const rl = readline.createInterface({ input: process.stdin });
+  for await (const line of rl) {
+    rl.close();
+    return line;
+  }
+  return '';
 }
 
 async function cmdHook(args) {
@@ -159,6 +169,20 @@ function cmdStatus() {
   console.log(JSON.stringify(getStatusSnapshot(config, registry)));
 }
 
+async function cmdOnboard() {
+  const token = await readStdinLine();
+  try {
+    const result = await attemptOnboarding(token);
+    console.log(JSON.stringify(result));
+  } catch (err) {
+    // attemptOnboarding's own failure modes (empty token, no message yet) are
+    // returned, not thrown - this only catches things like a malformed token
+    // rejected outright by Telegram's API. Always print valid JSON so the
+    // desktop app's Rust side never has to parse a bare stack trace.
+    console.log(JSON.stringify({ ok: false, reason: 'error', message: err.message }));
+  }
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -174,8 +198,10 @@ async function main() {
       return cmdHook(rest);
     case 'status':
       return cmdStatus();
+    case 'onboard':
+      return cmdOnboard();
     default:
-      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite|status>');
+      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite|status|onboard>');
       process.exitCode = command ? 1 : 0;
   }
 }

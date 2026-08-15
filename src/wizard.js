@@ -14,6 +14,33 @@ async function defaultPrompt(question) {
 }
 
 /**
+ * Given an already-validated, non-empty bot token, tries once to detect a
+ * chat that has messaged that bot and, on success, registers it as the
+ * operator and saves the config. Shared by the terminal wizard (which
+ * validates and prompts before calling this) and the desktop app's GUI
+ * onboarding (which calls this directly, on demand, with no prompting) -
+ * see design.md Decision 1 in add-desktop-onboarding.
+ */
+export async function attemptOnboarding(token, { getUpdatesFn = getUpdates, saveConfigFn = saveConfig } = {}) {
+  const trimmedToken = (token ?? '').trim();
+  if (!trimmedToken) {
+    return { ok: false, reason: 'empty-token' };
+  }
+  const config = createDefaultConfig(trimmedToken);
+
+  const updates = await getUpdatesFn(config, 0, 5);
+  const withChat = [...updates].reverse().find((u) => u.message?.chat?.id != null);
+  if (!withChat) {
+    return { ok: false, reason: 'no-message-yet' };
+  }
+
+  const chatId = String(withChat.message.chat.id);
+  registerOwner(config, chatId, 'operator');
+  saveConfigFn(config);
+  return { ok: true, chatId, ownerId: 'operator' };
+}
+
+/**
  * First-run setup: bot token (interaction 1), then a short confirmation once
  * the operator has messaged their own bot (interaction 2) - from which the
  * operator's chat id is auto-detected, so they never need to know or paste
@@ -33,17 +60,12 @@ export async function runFirstRunWizard({
   if (!token) {
     throw new Error('Token do bot não pode ser vazio.');
   }
-  const config = createDefaultConfig(token);
 
   await prompt('Agora mande qualquer mensagem para o seu bot no Telegram e pressione Enter aqui...');
-  const updates = await getUpdatesFn(config, 0, 5);
-  const withChat = [...updates].reverse().find((u) => u.message?.chat?.id != null);
-  if (!withChat) {
+
+  const result = await attemptOnboarding(token, { getUpdatesFn, saveConfigFn });
+  if (!result.ok) {
     throw new Error('Não recebi nenhuma mensagem do bot ainda. Mande uma mensagem para ele e rode a instalação de novo.');
   }
-
-  const chatId = String(withChat.message.chat.id);
-  registerOwner(config, chatId, 'operator');
-  saveConfigFn(config);
-  return { ranWizard: true, chatId, ownerId: 'operator' };
+  return { ranWizard: true, chatId: result.chatId, ownerId: result.ownerId };
 }
