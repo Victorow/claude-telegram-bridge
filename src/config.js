@@ -70,6 +70,21 @@ export function createDefaultConfig(botToken) {
   return { ...DEFAULTS, botToken, owners: {}, invites: {} };
 }
 
+/** Pure: returns a new config with `enabled`/`granularity` updated where provided, leaving anything not passed untouched. Shared by the `settings` CLI subcommand and (indirectly) the desktop app's update_settings command. */
+export function applySettingsUpdate(config, { enabled, granularity } = {}) {
+  const updated = { ...config };
+  if (enabled !== undefined) {
+    updated.enabled = enabled;
+  }
+  if (granularity !== undefined) {
+    if (!['default', 'verbose'].includes(granularity)) {
+      throw new Error(`granularity must be "default" or "verbose", got "${granularity}"`);
+    }
+    updated.granularity = granularity;
+  }
+  return updated;
+}
+
 /** Reverse lookup: each owner maps to exactly one registered chat. */
 export function chatIdForOwner(config, ownerId) {
   const entry = Object.entries(config.owners).find(([, owner]) => owner === ownerId);

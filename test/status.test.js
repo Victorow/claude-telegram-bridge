@@ -47,3 +47,8 @@ test('reports no connected chat id when the operator has not registered one yet'
   const result = getStatusSnapshot(baseConfig({ owners: {} }), emptyRegistry());
   assert.equal(result.connectedChatId, null);
 });
+
+test('reports granularity alongside enabled', () => {
+  const result = getStatusSnapshot(baseConfig({ granularity: 'verbose' }), emptyRegistry());
+  assert.equal(result.granularity, 'verbose');
+});

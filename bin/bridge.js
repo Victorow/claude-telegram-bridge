@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
-import { loadConfig, saveConfig } from '../src/config.js';
+import { loadConfig, saveConfig, applySettingsUpdate } from '../src/config.js';
 import { loadRegistry } from '../src/registry.js';
 import { runFirstRunWizard, attemptOnboarding } from '../src/wizard.js';
 import { installAccount, uninstallAccount, defaultClaudeSettingsPath, defaultHookInvocation } from '../src/installer.js';
@@ -183,6 +183,32 @@ async function cmdOnboard() {
   }
 }
 
+function cmdSettings(args) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      json: { type: 'boolean' }, // accepted for consistency with status/onboard's `--json` - this subcommand always prints JSON regardless
+      'set-enabled': { type: 'string' },
+      'set-granularity': { type: 'string' },
+    },
+  });
+  const config = loadConfig();
+  if (!config) {
+    console.log(JSON.stringify({ ok: false, reason: 'not-configured' }));
+    return;
+  }
+  try {
+    const updated = applySettingsUpdate(config, {
+      enabled: values['set-enabled'] !== undefined ? values['set-enabled'] === 'true' : undefined,
+      granularity: values['set-granularity'],
+    });
+    saveConfig(updated);
+    console.log(JSON.stringify({ ok: true, enabled: updated.enabled, granularity: updated.granularity }));
+  } catch (err) {
+    console.log(JSON.stringify({ ok: false, reason: 'error', message: err.message }));
+  }
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -200,8 +226,10 @@ async function main() {
       return cmdStatus();
     case 'onboard':
       return cmdOnboard();
+    case 'settings':
+      return cmdSettings(rest);
     default:
-      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite|status|onboard>');
+      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite|status|onboard|settings>');
       process.exitCode = command ? 1 : 0;
   }
 }

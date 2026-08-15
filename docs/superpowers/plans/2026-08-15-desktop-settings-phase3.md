@@ -155,11 +155,17 @@ import { loadConfig, saveConfig, applySettingsUpdate } from '../src/config.js';
 
 Add the command function near `cmdStatus`:
 
+> **Post-execution correction:** the first manual run of this subcommand (Step 10 below) threw `ERR_PARSE_ARGS_UNKNOWN_OPTION` for `--json`. Unlike `status`/`onboard` (which ignore whatever args follow the subcommand entirely), `cmdSettings` actually parses `args` with Node's `parseArgs`, which is strict by default - any flag not declared in `options` throws. Fixed by declaring (and ignoring) a `json` boolean option below, present purely for command-line consistency with the other subcommands.
+
 ```javascript
 function cmdSettings(args) {
   const { values } = parseArgs({
     args,
-    options: { 'set-enabled': { type: 'string' }, 'set-granularity': { type: 'string' } },
+    options: {
+      json: { type: 'boolean' }, // accepted for consistency with status/onboard's `--json` - this subcommand always prints JSON regardless
+      'set-enabled': { type: 'string' },
+      'set-granularity': { type: 'string' },
+    },
   });
   const config = loadConfig();
   if (!config) {

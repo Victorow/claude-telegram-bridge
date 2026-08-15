@@ -15,6 +15,7 @@ export function getStatusSnapshot(config, registry) {
   return {
     configured: true,
     enabled: config.enabled,
+    granularity: config.granularity,
     connectedOwner: 'operator',
     connectedChatId: chatIdForOwner(config, 'operator') ?? null,
     sessionCount: sessions.length,

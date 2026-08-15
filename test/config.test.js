@@ -10,6 +10,7 @@ import {
   saveConfig,
   createDefaultConfig,
   validateConfig,
+  applySettingsUpdate,
 } from '../src/config.js';
 
 function withTempConfigDir(fn) {
@@ -74,4 +75,29 @@ test('getConfigDir defaults under the home directory', () => {
   } finally {
     if (prev !== undefined) process.env.BRIDGE_CONFIG_DIR = prev;
   }
+});
+
+test('applySettingsUpdate with no changes returns an equivalent config', () => {
+  const config = createDefaultConfig('123:abc');
+  const result = applySettingsUpdate(config, {});
+  assert.deepEqual(result, config);
+});
+
+test('applySettingsUpdate sets enabled without touching granularity', () => {
+  const config = createDefaultConfig('123:abc');
+  const result = applySettingsUpdate(config, { enabled: false });
+  assert.equal(result.enabled, false);
+  assert.equal(result.granularity, 'default');
+});
+
+test('applySettingsUpdate sets granularity without touching enabled', () => {
+  const config = createDefaultConfig('123:abc');
+  const result = applySettingsUpdate(config, { granularity: 'verbose' });
+  assert.equal(result.granularity, 'verbose');
+  assert.equal(result.enabled, true);
+});
+
+test('applySettingsUpdate rejects an invalid granularity', () => {
+  const config = createDefaultConfig('123:abc');
+  assert.throws(() => applySettingsUpdate(config, { granularity: 'chatty' }), /granularity/);
 });
