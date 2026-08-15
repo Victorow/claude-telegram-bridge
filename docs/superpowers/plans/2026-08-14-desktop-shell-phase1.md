@@ -16,6 +16,8 @@
 - Building the desktop app requires the Rust toolchain (`rustup`) and, on Windows, the MSVC C++ Build Tools (`Microsoft.VisualStudio.2022.BuildTools` with the `Microsoft.VisualStudio.Workload.VCTools` workload) — both already installed and verified on this machine as of this plan.
 - The desktop app is a **separate, alternative** distribution to the CLI + scheduled-task install — nothing in this plan changes how the existing CLI distribution behaves.
 
+> **Post-execution correction:** Task 2 Step 7's `cargo build` does **not** actually succeed on its own — Tauri's `build.rs` validates that `externalBin`'s target file exists on disk at `cargo build` time, not just at bundling time, so it fails with `resource path 'binaries\bridge-<triple>.exe' doesn't exist` until Task 3's `prepare-sidecar.mjs` has been run at least once. In practice, do Task 3 Steps 1-3 (write and run the script) before attempting Task 2 Step 7's build verification. Both tasks were still committed separately, split by file — this only affects the order verification actually happens in, not what ends up in which commit.
+
 ---
 
 ### Task 1: Bridge-side status snapshot
