@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, saveConfig } from '../src/config.js';
+import { loadRegistry } from '../src/registry.js';
 import { runFirstRunWizard } from '../src/wizard.js';
 import { installAccount, uninstallAccount, defaultClaudeSettingsPath, defaultHookInvocation } from '../src/installer.js';
 import { registerService } from '../src/service.js';
@@ -10,6 +11,7 @@ import { runPollingLoop, sendMessage } from '../src/gateway.js';
 import { relayInboundMessage } from '../src/inputRelay.js';
 import { redeemInvite, createInvite } from '../src/registration.js';
 import { handleHookEvent } from '../src/outputRelay.js';
+import { getStatusSnapshot } from '../src/status.js';
 import { appendLog } from '../src/log.js';
 
 // `import.meta.url` is only meaningful when this file runs as real ESM
@@ -151,6 +153,12 @@ function cmdUninstall(args) {
   console.log(`Hooks removidos para o dono "${owner}" em ${settingsPath}`);
 }
 
+function cmdStatus() {
+  const config = loadConfig();
+  const registry = loadRegistry();
+  console.log(JSON.stringify(getStatusSnapshot(config, registry)));
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   switch (command) {
@@ -164,8 +172,10 @@ async function main() {
       return cmdInvite(rest);
     case 'hook':
       return cmdHook(rest);
+    case 'status':
+      return cmdStatus();
     default:
-      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite>');
+      console.log('Uso: claude-telegram-bridge <start|install|uninstall|invite|status>');
       process.exitCode = command ? 1 : 0;
   }
 }
