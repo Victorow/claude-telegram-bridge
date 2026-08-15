@@ -13,26 +13,47 @@ function sameHookEntry(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Idempotent: adds this bridge's hook entry for Stop/Notification without touching any other entry already present. */
+/**
+ * Extracts the `--owner <id>` value a hook entry was built with, or null if
+ * it isn't one of ours (no `--owner` flag at all - e.g. an unrelated hook a
+ * user configured by hand). Matching by owner rather than by exact command
+ * string is what lets re-installing for the same owner via a *different*
+ * binary (source `node bridge.js` vs. a packaged/sidecar binary - e.g. CLI
+ * vs. desktop distributions) replace the old entry instead of accumulating
+ * a duplicate that fires alongside it on every hook event.
+ */
+function hookEntryOwner(entry) {
+  const args = entry?.hooks?.[0]?.args;
+  if (!Array.isArray(args)) return null;
+  const idx = args.indexOf('--owner');
+  return idx >= 0 ? args[idx + 1] : null;
+}
+
+/** Idempotent per owner: adds/replaces this owner's hook entry for Stop/Notification without touching any other owner's entry, or any unrelated hook already present. */
 export function mergeHooksIntoSettings(settings, { command, args }) {
   const next = { ...settings, hooks: { ...(settings.hooks || {}) } };
   const entry = buildHookEntry({ command, args });
+  const owner = hookEntryOwner(entry);
   for (const event of HOOK_EVENTS) {
     const existingList = Array.isArray(next.hooks[event]) ? next.hooks[event] : [];
-    const alreadyPresent = existingList.some((e) => sameHookEntry(e, entry));
-    next.hooks[event] = alreadyPresent ? existingList : [...existingList, entry];
+    const withoutThisOwner = owner == null ? existingList : existingList.filter((e) => hookEntryOwner(e) !== owner);
+    next.hooks[event] = [...withoutThisOwner, entry];
   }
   return next;
 }
 
-/** Removes exactly the entry this bridge would have added for this command/args - never anything else. */
+/** Removes this owner's hook entry, regardless of which command/binary it was installed with - never anything else. */
 export function removeHooksFromSettings(settings, { command, args }) {
   if (!settings.hooks) return settings;
   const entry = buildHookEntry({ command, args });
+  const owner = hookEntryOwner(entry);
   const next = { ...settings, hooks: { ...settings.hooks } };
   for (const event of HOOK_EVENTS) {
     const existingList = Array.isArray(next.hooks[event]) ? next.hooks[event] : [];
-    next.hooks[event] = existingList.filter((e) => !sameHookEntry(e, entry));
+    next.hooks[event] =
+      owner == null
+        ? existingList.filter((e) => !sameHookEntry(e, entry))
+        : existingList.filter((e) => hookEntryOwner(e) !== owner);
   }
   return next;
 }

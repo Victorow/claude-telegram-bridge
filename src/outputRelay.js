@@ -42,7 +42,7 @@ export function formatMessage(payload, { label, hasMultipleSessions }) {
     return `${prefix}${payload.last_assistant_message || '(sem texto de resposta)'}`;
   }
   if (payload.hook_event_name === 'Notification') {
-    return `${prefix}⚠️ ${payload.notification_message}`;
+    return `${prefix}⚠️ ${payload.notification_message || '(sem detalhes)'}`;
   }
   return null;
 }

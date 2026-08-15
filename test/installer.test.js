@@ -84,6 +84,40 @@ test('Notification hook entry has no matcher (broad by design - see design.md De
   assert.equal(entry.matcher, undefined);
 });
 
+test('installing with a different command for the same owner replaces the old entry instead of duplicating it', () => {
+  withTempSettingsPath((settingsPath) => {
+    installAccount({ settingsPath, command: '/usr/bin/node', args: ['/opt/bridge/hook.js', '--owner', 'caio'] });
+    const result = installAccount({ settingsPath, command: '/opt/bridge/bridge-binary', args: ['hook', '--owner', 'caio'] });
+    assert.equal(result.hooks.Stop.length, 1);
+    assert.equal(result.hooks.Stop[0].hooks[0].command, '/opt/bridge/bridge-binary');
+    assert.equal(result.hooks.Notification.length, 1);
+    assert.equal(result.hooks.Notification[0].hooks[0].command, '/opt/bridge/bridge-binary');
+  });
+});
+
+test('installing a second owner does not disturb the first owner\'s entry', () => {
+  withTempSettingsPath((settingsPath) => {
+    installAccount({ settingsPath, command: '/usr/bin/node', args: ['/opt/bridge/hook.js', '--owner', 'caio'] });
+    const result = installAccount({ settingsPath, command: '/usr/bin/node', args: ['/opt/bridge/hook.js', '--owner', 'amigo'] });
+    assert.equal(result.hooks.Stop.length, 2);
+    assert.ok(result.hooks.Stop.some((e) => e.hooks[0].args.includes('caio')));
+    assert.ok(result.hooks.Stop.some((e) => e.hooks[0].args.includes('amigo')));
+  });
+});
+
+test('uninstall removes this owner\'s entry even if it was installed with a different command variant', () => {
+  withTempSettingsPath((settingsPath) => {
+    installAccount({ settingsPath, command: '/usr/bin/node', args: ['/opt/bridge/hook.js', '--owner', 'caio'] });
+    const afterUninstall = uninstallAccount({
+      settingsPath,
+      command: '/different/path/bridge-binary',
+      args: ['hook', '--owner', 'caio'],
+    });
+    assert.equal(afterUninstall.hooks.Stop.length, 0);
+    assert.equal(afterUninstall.hooks.Notification.length, 0);
+  });
+});
+
 test('mergeHooksIntoSettings is a pure function that does not mutate the input', () => {
   const original = { hooks: {} };
   const result = mergeHooksIntoSettings(original, HOOK);

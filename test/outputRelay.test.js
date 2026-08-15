@@ -120,6 +120,13 @@ test('Notification with a default-tier type is relayed', async () => {
   assert.match(h.sent[0].text, /needs permission for Bash/);
 });
 
+test('Notification with no notification_message falls back to placeholder text instead of the literal word "undefined"', async () => {
+  const h = harness();
+  await h.call({ hook_event_name: 'Notification', session_id: 'abc', cwd: '/p1', notification_type: 'permission_prompt' });
+  assert.equal(h.sent.length, 1);
+  assert.doesNotMatch(h.sent[0].text, /undefined/);
+});
+
 test('Notification with a verbose-only type is filtered out by default granularity', async () => {
   const h = harness();
   const result = await h.call({ hook_event_name: 'Notification', session_id: 'abc', cwd: '/p1', notification_type: 'agent_completed', notification_message: 'sub-agent done' });
