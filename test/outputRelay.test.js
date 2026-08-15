@@ -59,6 +59,51 @@ test('Stop event includes the label when the owner has more than one session', a
   assert.equal(h.sent[0].text, '[projeto1] build ok');
 });
 
+test('origin suffix is added when an interactive session and its telegram-fork share a label', async () => {
+  const registry = {
+    sessions: {
+      fork1: { sessionId: 'fork1', owner: 'caio', label: 'projeto1', origin: 'telegram-fork', lastActive: 1 },
+    },
+    outboundMessages: {},
+  };
+  const h = harness({ registry });
+  await h.call({ hook_event_name: 'Stop', session_id: 'abc', cwd: '/p1', last_assistant_message: 'build ok' });
+  assert.equal(h.sent[0].text, '[projeto1 · IDE] build ok');
+});
+
+test('origin suffix reflects the telegram-fork session when it is the one relaying', async () => {
+  const registry = {
+    sessions: {
+      abc: { sessionId: 'abc', owner: 'caio', label: 'projeto1', origin: 'interactive', lastActive: 1 },
+      fork1: { sessionId: 'fork1', owner: 'caio', label: 'projeto1', origin: 'telegram-fork', lastActive: 1 },
+    },
+    outboundMessages: {},
+  };
+  const sent = [];
+  await handleHookEvent(
+    { hook_event_name: 'Stop', session_id: 'fork1', cwd: '/p1', last_assistant_message: 'resposta pelo telegram' },
+    {
+      owner: 'caio',
+      label: 'projeto1',
+      config: baseConfig(),
+      registry,
+      send: async (cfg, chatId, text) => {
+        sent.push({ chatId, text });
+        return { message_id: 1 };
+      },
+      persistRegistry: () => {},
+      now: () => 1,
+    }
+  );
+  assert.equal(sent[0].text, '[projeto1 · Telegram] resposta pelo telegram');
+});
+
+test('no origin suffix is added when only one origin is registered under a label', async () => {
+  const h = harness();
+  await h.call({ hook_event_name: 'Stop', session_id: 'abc', cwd: '/p1', last_assistant_message: 'build ok' });
+  assert.equal(h.sent[0].text, 'build ok'); // single session: no bracketed label at all, matching today's behavior
+});
+
 test('no message is sent while disabled, but the session is still tracked', async () => {
   const registry = emptyRegistry();
   const h = harness({ config: baseConfig({ enabled: false }), registry });

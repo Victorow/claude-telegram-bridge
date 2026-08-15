@@ -15,6 +15,18 @@ const VERBOSE_NOTIFICATION_TYPES = new Set([
   'elicitation_url_dialog',
 ]);
 
+const ORIGIN_LABEL_SUFFIX = { interactive: 'IDE', 'telegram-fork': 'Telegram' };
+
+/** Only disambiguates when a same-labeled sibling of a *different* origin exists for this owner - before any fork exists, this returns `label` unchanged. */
+function labelWithOriginSuffix(session, label, registry, owner) {
+  const sessionOrigin = session.origin || 'interactive';
+  const hasDifferentOriginSibling = sessionsForOwner(registry, owner).some(
+    (s) => s.sessionId !== session.sessionId && s.label === label && (s.origin || 'interactive') !== sessionOrigin
+  );
+  if (!hasDifferentOriginSibling) return label;
+  return `${label} · ${ORIGIN_LABEL_SUFFIX[sessionOrigin]}`;
+}
+
 export function shouldRelay(payload, config) {
   if (payload.hook_event_name === 'Stop') return true;
   if (payload.hook_event_name === 'Notification') {
@@ -78,7 +90,8 @@ export async function handleHookEvent(
   }
 
   const hasMultipleSessions = sessionsForOwner(registry, owner).length > 1;
-  const text = formatMessage(payload, { label: resolvedLabel, hasMultipleSessions });
+  const displayLabel = labelWithOriginSuffix(registry.sessions[payload.session_id], resolvedLabel, registry, owner);
+  const text = formatMessage(payload, { label: displayLabel, hasMultipleSessions });
   if (text === null) {
     persistRegistry(registry);
     return { sent: false, reason: 'no-content' };
