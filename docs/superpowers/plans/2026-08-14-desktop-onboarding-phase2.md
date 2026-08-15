@@ -563,6 +563,18 @@ git commit -m "feat: add GUI-driven onboarding, guard start against running whil
 **Interfaces:**
 - Consumes: the fully wired app from Tasks 1-2.
 
+> **Post-execution correction:** the very first manual run of this task hit a real bug: clicking "Verificar" appeared to do nothing. Root cause - the desktop app's bundled sidecar binary (`desktop/src-tauri/binaries/bridge-*.exe`) is a snapshot built by `npm run prepare-sidecar` (see `add-desktop-shell` Task 3); it was built *before* Task 1 of this plan added the `onboard` subcommand, so the stale binary fell through to its `default:` usage-message case, which isn't JSON - and the frontend's `complete_onboarding` handler had no `try/catch`, so the `JSON.parse` failure surfaced nowhere visible. Two fixes, both required: **(a)** run `npm run prepare-sidecar` (from `desktop/`) again to rebuild the sidecar with the current `bin/bridge.js` - required after *any* change to bridge-side code, not just this one; **(b)** wrap the "Verificar" click handler's body in `try/catch`, reporting `err` into `onboardingErrorEl` on failure, so a stale/broken sidecar is visible instead of silent next time.
+
+- [ ] **Step 0: Rebuild the sidecar with the current bridge code**
+
+```powershell
+cd desktop
+npm run prepare-sidecar
+cd ..
+```
+
+Required before this task's manual verification, since Task 1 changed `bin/bridge.js` (added `onboard`) after the sidecar binary bundled in Task 2 was last built.
+
 - [ ] **Step 1: Set aside the existing config temporarily**
 
 ```powershell

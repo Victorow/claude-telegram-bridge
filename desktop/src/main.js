@@ -44,20 +44,27 @@ document.getElementById('open-botfather').addEventListener('click', () => {
 
 document.getElementById('verify').addEventListener('click', async () => {
   onboardingErrorEl.textContent = '';
-  const result = await invoke('complete_onboarding', { token: tokenInput.value });
-  const parsed = JSON.parse(result);
-  if (!parsed.ok) {
-    if (parsed.reason === 'empty-token') {
-      onboardingErrorEl.textContent = 'Cole o token antes de verificar.';
-    } else if (parsed.reason === 'no-message-yet') {
-      onboardingErrorEl.textContent = 'Não recebi nenhuma mensagem ainda. Manda uma mensagem pro bot no Telegram e tenta de novo.';
-    } else {
-      onboardingErrorEl.textContent = `Não consegui verificar: ${parsed.message ?? 'token inválido?'}`;
+  try {
+    const result = await invoke('complete_onboarding', { token: tokenInput.value });
+    const parsed = JSON.parse(result);
+    if (!parsed.ok) {
+      if (parsed.reason === 'empty-token') {
+        onboardingErrorEl.textContent = 'Cole o token antes de verificar.';
+      } else if (parsed.reason === 'no-message-yet') {
+        onboardingErrorEl.textContent = 'Não recebi nenhuma mensagem ainda. Manda uma mensagem pro bot no Telegram e tenta de novo.';
+      } else {
+        onboardingErrorEl.textContent = `Não consegui verificar: ${parsed.message ?? 'token inválido?'}`;
+      }
+      return;
     }
-    return;
+    await invoke('start_bridge');
+    await refresh();
+  } catch (err) {
+    // Covers Tauri-side invoke failures and a non-JSON result alike, so a
+    // stale/broken sidecar surfaces as a visible message instead of the
+    // click silently doing nothing.
+    onboardingErrorEl.textContent = `Não consegui verificar: ${err}`;
   }
-  await invoke('start_bridge');
-  await refresh();
 });
 
 document.getElementById('start').addEventListener('click', () => invoke('start_bridge'));
